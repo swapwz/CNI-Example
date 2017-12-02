@@ -12,18 +12,18 @@ import (
 
 type Client struct {
     Host string
-    Port int
+    Port string
     Config *rest.Config
 }
 
-func CreateInsecureClient(host string, port int) *Client {
+func CreateInsecureClient(host string, port string) *Client {
     client := &Client{
         Host: host,
         Port: port,
     }
 
     config := &rest.Config{
-        Host: fmt.Sprintf("http://%s:%s", host, string(port)),
+        Host: fmt.Sprintf("http://%s:%s", host, port),
     } 
    
     config = rest.AnonymousClientConfig(config)
