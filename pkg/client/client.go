@@ -23,7 +23,7 @@ func CreateInsecureClient(host string, port int) *Client {
     }
 
     config := &rest.Config{
-        Host: fmt.Sprintf("http://%s:%s", host, String(port)),
+        Host: fmt.Sprintf("http://%s:%s", host, string(port)),
     } 
    
     config = rest.AnonymousClientConfig(config)
