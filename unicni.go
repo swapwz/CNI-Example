@@ -18,8 +18,8 @@ import (
     "github.com/vishvananda/netlink"
 )
 
-const defaultMTU = 1400
-const defaultPromiscMode = True
+const defaultHost = "127.0.0.1"
+const defaultPort = 8080
 
 var (
     ErrLinkNotFound = errors.New("link not found")
@@ -38,6 +38,10 @@ func cmdAdd(args *skel.CmdArgs) error {
     if err != nil {
         return fmt.Errorf("[UNION CNI]: Failed to load netconf: %v\r\n", err)
     }
+   
+    // Get annotaions, parse data and control bridge name
+    client.CreateInsecureClient(defaultHost, defaultPort)
+    parseAnnotation
 
     result := &current.Result{}
 

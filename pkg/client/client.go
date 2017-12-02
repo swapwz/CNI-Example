@@ -12,18 +12,18 @@ import (
 
 type Client struct {
     Host string
-    Port string
+    Port int
     Config *rest.Config
 }
 
-func CreateInsecureClient(host, port string) *Client {
+func CreateInsecureClient(host string, port int) *Client {
     client := &Client{
         Host: host,
         Port: port,
     }
 
     config := &rest.Config{
-        Host: fmt.Sprintf("http://%s:%s", host, port),
+        Host: fmt.Sprintf("http://%s:%s", host, String(port)),
     } 
    
     config = rest.AnonymousClientConfig(config)
@@ -32,7 +32,7 @@ func CreateInsecureClient(host, port string) *Client {
     return client
 }
 
-func (cli *Client) GetAnnotations(namespace, podname string) (*v1.Pod, error) {
+func (cli *Client) GetPod(namespace, podname string) (*v1.Pod, error) {
     clientset, err := kubernetes.NewForConfig(cli.Config)
     if err != nil {
         return nil, fmt.Errorf("Create client failed: %v", err)
