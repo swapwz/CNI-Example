@@ -40,7 +40,7 @@ func (cli *Client) GetPod(namespace, podname string) (*v1.Pod, error) {
 
     pod, err := clientset.CoreV1().Pods(namespace).Get(podname, metav1.GetOptions{})
     if err != nil {
-        return nil, fmt.Errorf("No such pod %s in namespace %s", podname, namespace)
+        return nil, fmt.Errorf("No such pod %s in namespace %s: %v", podname, namespace, err)
     }
 
     return pod, nil
