@@ -2,42 +2,45 @@ package bridge
 
 import (
     "fmt"
+    "os"
     "syscall"
 
     "github.com/containernetworking/cni/pkg/types/current"
     "github.com/vishvananda/netlink"
 )
 
-const defaultMTU = 1500
-const defaultPromiscMode = True
+const defaultMTU = 1400
+const defaultPromiscMode = true
 
 type Bridge struct {
     Data *netlink.Bridge
     Name string
 }
 
+func (br *Bridge)BridgeInterface() (*current.Interface) {
+    return &current.Interface {
+        Name: br.Data.Attrs().Name,
+        Mac: br.Data.Attrs().HardwareAddr.String(),
+    }
+}
+
 func BridgeByName(name string) (*netlink.Bridge, error) {
     link, err := netlink.LinkByName(name)
     if err != nil {
-        return nil, fmt.Errorf("[UNION CNI] could not lookup %q: %v", name, err)
+        return nil, fmt.Errorf("could not lookup %q: %v", name, err)
     }
     
     br, ok := link.(*netlink.Bridge)
     if !ok {
-        return nil, fmt.Errorf("[UNION CNI] %q already exists but is not a bridge", name)
+        return nil, fmt.Errorf("%q already exists but is not a bridge", name)
     }
     
     return br, nil
 }
 
-func (br *Bridge)AddLink(linkName string) error {
-    link, err := netlink.LinkByName(linkName)
-    if err != nil {
-        fmt.Fprintf(os.Stderr, "[UNION CNI] failed to lookup %q when add to %q: %v", linkName, br.Name, err)
-        return err
-    }
-    if err = netlink.LinkSetMaster(link, br.Data); err != {
-        fmt.Fprintf(os.Stderr, "[UNION CNI] failed to add link %q to bridge %q: %v", linkName, br.Name, err)
+func (br *Bridge)AddLink(link netlink.Link) error {
+    if err := netlink.LinkSetMaster(link, br.Data); err != nil {
+        fmt.Fprintf(os.Stderr, "[UNION CNI] failed to add link %q to bridge %q: %v\r\n", link, br.Name, err)
         return err
     }
     return nil
@@ -58,12 +61,12 @@ func ensureBridge(name string, mtu int, promiscMode bool) (*netlink.Bridge, erro
 
     err := netlink.LinkAdd(br)
     if err != nil && err != syscall.EEXIST {
-        return nil, fmt.Errorf("[UNION CNI] could not add %q: %v", name, err)
+        return nil, fmt.Errorf("could not add %q: %v", name, err)
     }
 
     if promiscMode {
         if err := netlink.SetPromiscOn(br); err != nil {
-            return nil, fmt.Errorf("[UNION CNI] could not set promiscuous mode on %q: %v", name, err)
+            return nil, fmt.Errorf("could not set promiscuous mode on %q: %v", name, err)
         }
     }
 
@@ -84,7 +87,7 @@ func ensureBridge(name string, mtu int, promiscMode bool) (*netlink.Bridge, erro
 func CreateBridge(name string) (*Bridge, error) {
     br, err := ensureBridge(name, defaultMTU, defaultPromiscMode)
     if err != nil {
-        return nil, fmt.Error("[UNION CNI] failed to create bridge %q: %v", name, err)
+        return nil, fmt.Errorf("failed to create bridge %q: %v", name, err)
     }
 
     bridge := &Bridge{
@@ -92,5 +95,5 @@ func CreateBridge(name string) (*Bridge, error) {
         Name: name,
     }
 
-    return , nil
+    return bridge, nil
 }

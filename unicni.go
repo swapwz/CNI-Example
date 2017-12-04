@@ -8,30 +8,48 @@ import (
     "errors"
     "encoding/json"
 
-    "github.com/union-cni/pkg/client"
+    "github.com/union-cni/pkg/bridge"
+    "github.com/union-cni/pkg/veth"
+    "github.com/union-cni/pkg/netinfo"
 
     "github.com/containernetworking/cni/pkg/skel"
     "github.com/containernetworking/cni/pkg/types"
     "github.com/containernetworking/cni/pkg/types/current"
     "github.com/containernetworking/cni/pkg/version"
+    "github.com/containernetworking/plugins/pkg/ns"
 )
 
 const (
     defaultHost = "127.0.0.1"
     defaultPort = "8080"
-)
+    credAnnotation = "credential"
+    groupAnnotation = "group"
+    ctrlPortAnnotation = "control_port"
+    dataPortAnnotation = "data_port"
+) 
 
 var (
     ErrLinkNotFound = errors.New("link not found")
 )
 
+type NetworkInfo struct {
+    Crediential string `json:"credential"` 
+    Group       string `json:"group"`
+    CtrlPort    string `json:"control_port"`
+    DataPort    string `json:"data_port"`
+    ExternalPort []struct {
+        HostPort string `json:"host_port"`
+        ContainerPort string `json:"container_port"`
+        MapType string `json:"type"`
+    } `json:"external_port"`
+}
 
 type K8SArgs struct {
-        types.CommonArgs
-        IP                         net.IP
-        K8S_POD_NAME               types.UnmarshallableString
-        K8S_POD_NAMESPACE          types.UnmarshallableString
-        K8S_POD_INFRA_CONTAINER_ID types.UnmarshallableString
+    types.CommonArgs
+    IP                         net.IP
+    K8S_POD_NAME               types.UnmarshallableString
+    K8S_POD_NAMESPACE          types.UnmarshallableString
+    K8S_POD_INFRA_CONTAINER_ID types.UnmarshallableString
 }
 
 func init() {
@@ -39,6 +57,79 @@ func init() {
     // since namespace ops (unshare, setns) are done for a single thread, we
     // must ensure that the go routine does not jump from OS thread to thread
     runtime.LockOSThread()
+}
+
+func setupNetwork(net *netinfo.NetworkInfo, netns string) (*current.Result, error) {
+    // the length of bridge name must be less than 15 characters.
+    ctrlBrName := net.GetCtrlBridgeName()
+    ctrlBr, err := bridge.CreateBridge(ctrlBrName)
+    if err != nil {
+         fmt.Fprintf(os.Stderr, "[UNION CNI] failed to create bridge %s: %v\r\n", ctrlBrName, err)
+         return nil, err
+    }
+
+    dataBrName := net.GetDataBridgeName()
+    dataBr, err := bridge.CreateBridge(dataBrName)
+    if err != nil {
+         fmt.Fprintf(os.Stderr, "[UNION CNI] failed to create bridge %s: %v\r\n", ctrlBrName, err)
+         return nil, err
+    }
+
+    // create veth pairs
+    ctrlPort := net.GetCtrlPort()
+    ctrlLink, ctrlHostLink, err := veth.CreateVethPairRandom(ctrlPort)
+    if err != nil {
+        fmt.Fprintf(os.Stderr, "[UNION CNI] failed to create veth pairs %s: %v\r\n", ctrlPort, err)
+        return nil, err
+    }
+
+    err = veth.JoinNetNS(ctrlPort, netns)
+    if err != nil {
+        fmt.Fprintf(os.Stderr, "[UNION CNI] failed to join namespace %s: %v\r\n", netns, err)
+        return nil, err
+    }
+
+    err = ctrlBr.AddLink(ctrlHostLink)
+    if err != nil {
+        fmt.Fprintf(os.Stderr, "[UNION CNI] failed to join bridge %s: %v\r\n", ctrlBr.Name, err)
+        return nil, err
+    }
+
+    dataPort := net.GetDataPort()
+    dataLink, dataHostLink, err := veth.CreateVethPairRandom(dataPort)
+    if err != nil {
+        fmt.Fprintf(os.Stderr, "[UNION CNI] failed to create veth pairs %s: %v\r\n", dataPort, err)
+        return nil, err
+    }
+
+    err = veth.JoinNetNS(dataPort, netns)
+    if err != nil {
+        fmt.Fprintf(os.Stderr, "[UNION CNI] failed to join namespace %s: %v\r\n", netns, err)
+        return nil, err
+    }
+
+    err = dataBr.AddLink(dataHostLink)
+    if err != nil {
+        fmt.Fprintf(os.Stderr, "[UNION CNI] failed to join bridge %s: %v\r\n", dataBr.Name, err)
+        return nil, err
+    }
+
+    // assemble result
+    result := &current.Result{}
+    ctrlBrIntf := ctrlBr.BridgeInterface()
+    dataBrIntf := dataBr.BridgeInterface()
+    netNS, err := ns.GetNS(netns)
+    ctrlLinkIntf := veth.VethInterface(ctrlLink, netNS)
+    dataLinkIntf := veth.VethInterface(dataLink, netNS)
+    netNS.Close() 
+    curNS, _ := ns.GetCurrentNS()
+    ctrlHostIntf := veth.VethInterface(ctrlHostLink, curNS)
+    dataHostIntf := veth.VethInterface(dataHostLink, curNS)
+
+    result.Interfaces = []*current.Interface{ctrlBrIntf, dataBrIntf, 
+        ctrlLinkIntf, ctrlHostIntf, dataLinkIntf, dataHostIntf}
+
+    return result, nil
 }
 
 func cmdAdd(args *skel.CmdArgs) error {
@@ -57,17 +148,16 @@ func cmdAdd(args *skel.CmdArgs) error {
     }
    
     // Get annotaions, parse data and control bridge name
-    fmt.Fprintf(os.Stderr, "[UNION CNI] k8s namespace: %s, pod name: %s\r\n", k8sArgs.K8S_POD_NAMESPACE, k8sArgs.K8S_POD_NAME)
-    k8scli := client.CreateInsecureClient(defaultHost, defaultPort)
-    pod, err := k8scli.GetPod(string(k8sArgs.K8S_POD_NAMESPACE), string(k8sArgs.K8S_POD_NAME))
-    if err != nil {
-        fmt.Fprintf(os.Stderr, "[UNION CNI] failed to get pod: %v\r\n", err)
-        return err
-    }
-    fmt.Fprintf(os.Stderr, "[UNION CNI] find pod %v", pod)
-    //parseDataControlName()
-
     result := &current.Result{}
+    fmt.Fprintf(os.Stderr, "[UNION CNI] k8s namespace: %s, pod name: %s\r\n", k8sArgs.K8S_POD_NAMESPACE, k8sArgs.K8S_POD_NAME)
+    if len(k8sArgs.K8S_POD_NAME) != 0 || len(k8sArgs.K8S_POD_NAMESPACE) != 0 {
+        netInfo, err := netinfo.GetNetInfo(defaultHost, defaultPort, string(k8sArgs.K8S_POD_NAMESPACE), string(k8sArgs.K8S_POD_NAME))
+        if err != nil {
+             return err
+        }
+        result, err = setupNetwork(netInfo, args.Netns) 
+        result.Interfaces = []*current.Interface{}
+    }
     return types.PrintResult(result, conf.CNIVersion)
 }
 
