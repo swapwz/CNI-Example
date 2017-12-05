@@ -103,11 +103,11 @@ func JoinNetNS(name string, nspath string) error {
     // move link to specified namespace
     if nspath != "" {
         netns, err := ns.GetNS(nspath)
-        defer netns.Close()
         if err != nil {
             fmt.Fprintf(os.Stderr, "[UNION CNI] failed to open netns %q: %v\r\n", nspath, err)
             return err
         }
+        defer netns.Close()
         if err := netlink.LinkSetNsFd(link, int(netns.Fd())); err != nil {
             fmt.Fprintf(os.Stderr, "[UNION CNI] failed to move link %q to netns: %v\r\n", name, err) 
             return err
