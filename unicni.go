@@ -27,16 +27,9 @@ const (
     dataPortAnnotation = "data_port"
 ) 
 
-type NetworkInfo struct {
-    Crediential string `json:"credential"` 
-    Group       string `json:"group"`
-    CtrlPort    string `json:"control_port"`
-    DataPort    string `json:"data_port"`
-    ExternalPort []struct {
-        HostPort string `json:"host_port"`
-        ContainerPort string `json:"container_port"`
-        MapType string `json:"type"`
-    } `json:"external_port"`
+type CNINetConf struct {
+    types.NetConf
+    KubeMaster string `json:"kubemaster"`
 }
 
 type K8SArgs struct {
@@ -145,7 +138,7 @@ func deleteNetwork(netInfo *netinfo.NetworkInfo, nspath string) error {
 }
 
 func cmdAdd(args *skel.CmdArgs) error {
-    conf := types.NetConf{}
+    conf := CNINetConf{}
     err := json.Unmarshal(args.StdinData, &conf)
     if err != nil {
         fmt.Fprintf(os.Stderr, "[UNION CNI] failed to load netconf: %v", err)
@@ -163,12 +156,19 @@ func cmdAdd(args *skel.CmdArgs) error {
     result := &current.Result{}
     fmt.Fprintf(os.Stderr, "[UNION CNI] k8s namespace: %s, pod name: %s\r\n", k8sArgs.K8S_POD_NAMESPACE, k8sArgs.K8S_POD_NAME)
     if len(k8sArgs.K8S_POD_NAME) != 0 || len(k8sArgs.K8S_POD_NAMESPACE) != 0 {
-        netInfo, err := netinfo.GetNetInfo(defaultHost, defaultPort, string(k8sArgs.K8S_POD_NAMESPACE), string(k8sArgs.K8S_POD_NAME))
-        if err != nil {
-             return err
+        var kubeMaster string
+        if conf.KubeMaster != "" {
+             kubeMaster = conf.KubeMaster
+        } else {
+	     kubeMaster = defaultHost
         }
-        result, err = createNetwork(netInfo, args.Netns) 
-        result.Interfaces = []*current.Interface{}
+        netInfo, _ := netinfo.GetNetInfo(kubeMaster, defaultPort, 
+                            string(k8sArgs.K8S_POD_NAMESPACE), 
+                            string(k8sArgs.K8S_POD_NAME))
+        // If no annotaion, just ignore it.
+        if netInfo != nil {
+            result,_ = createNetwork(netInfo, args.Netns) 
+        }
     }
     return types.PrintResult(result, conf.CNIVersion)
 }
