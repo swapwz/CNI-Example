@@ -4,6 +4,7 @@ import (
     "fmt"
     "os"
     "net"
+    "errors"
     "crypto/rand"
    
     "github.com/containernetworking/cni/pkg/types/current"
@@ -13,6 +14,10 @@ import (
 
 const defaultMTU = 1400
 const defaultPrefix = "sim"
+
+var (
+    ErrLinkNotFound = errors.New("link not found")
+)
 
 func makeVethPair(name string, peer string, mtu int) (netlink.Link, error) {
     veth := &netlink.Veth {
@@ -89,6 +94,27 @@ func CreateVethPair(name string, peer string) (netlink.Link, netlink.Link, error
     }
 
     return hostLink, peerLink, nil
+}
+
+func DelLink(name string, nspath string) error {
+    netns, err := ns.GetNS(nspath)
+    if err != nil {
+        return err
+    }
+    defer netns.Close()
+    link, err := netlink.LinkByName(name)
+    if err != nil {
+        if err.Error() == "Link not found" {
+             return ErrLinkNotFound
+        }
+        return fmt.Errorf("failed to lookup %q: %v", name, err)
+    }
+   
+    if err = netlink.LinkDel(link); err != nil {
+        return fmt.Errorf("failed to delete %q: %v", name, err)
+    }
+
+    return nil
 }
 
 // Current namespace is the default namespace

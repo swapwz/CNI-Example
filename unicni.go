@@ -5,7 +5,6 @@ import (
     "runtime"
     "net"
     "os"
-    "errors"
     "encoding/json"
 
     "github.com/union-cni/pkg/bridge"
@@ -27,10 +26,6 @@ const (
     ctrlPortAnnotation = "control_port"
     dataPortAnnotation = "data_port"
 ) 
-
-var (
-    ErrLinkNotFound = errors.New("link not found")
-)
 
 type NetworkInfo struct {
     Crediential string `json:"credential"` 
@@ -59,7 +54,7 @@ func init() {
     runtime.LockOSThread()
 }
 
-func setupNetwork(net *netinfo.NetworkInfo, netns string) (*current.Result, error) {
+func createNetwork(net *netinfo.NetworkInfo, netns string) (*current.Result, error) {
     // the length of bridge name must be less than 15 characters.
     ctrlBrName := net.GetCtrlBridgeName()
     ctrlBr, err := bridge.CreateBridge(ctrlBrName)
@@ -132,6 +127,23 @@ func setupNetwork(net *netinfo.NetworkInfo, netns string) (*current.Result, erro
     return result, nil
 }
 
+func deleteNetwork(netInfo *netinfo.NetworkInfo, nspath string) error {
+    ctrlPortName := netInfo.GetCtrlPort()
+    err := veth.DelLink(ctrlPortName, nspath)
+    if err != nil && err != veth.ErrLinkNotFound {
+         fmt.Fprintf(os.Stderr, "[UNION CNI] failed to delete link %s: %v\r\n", ctrlPortName, err)
+         return err
+    }
+
+    dataPortName := netInfo.GetDataPort()
+    err = veth.DelLink(dataPortName, nspath)
+    if err != nil && err != veth.ErrLinkNotFound {
+         fmt.Fprintf(os.Stderr, "[UNION CNI] failed to delete link %s: %v\r\n", ctrlPortName, err)
+         return err
+    }
+    return nil
+}
+
 func cmdAdd(args *skel.CmdArgs) error {
     conf := types.NetConf{}
     err := json.Unmarshal(args.StdinData, &conf)
@@ -155,7 +167,7 @@ func cmdAdd(args *skel.CmdArgs) error {
         if err != nil {
              return err
         }
-        result, err = setupNetwork(netInfo, args.Netns) 
+        result, err = createNetwork(netInfo, args.Netns) 
         result.Interfaces = []*current.Interface{}
     }
     return types.PrintResult(result, conf.CNIVersion)
@@ -164,6 +176,28 @@ func cmdAdd(args *skel.CmdArgs) error {
 func cmdDel(args *skel.CmdArgs) error {
     // Delete all port related current user's pod
     fmt.Fprintf(os.Stderr, "[UNION CNI] action delete.\r\n")
+    conf := types.NetConf{}
+    err := json.Unmarshal(args.StdinData, &conf)
+    if err != nil {
+        fmt.Fprintf(os.Stderr, "[UNION CNI] failed to load netconf: %v", err)
+        return err
+    }
+
+    k8sArgs := K8SArgs{}
+    err = types.LoadArgs(args.Args, &k8sArgs)
+    if err != nil {
+        fmt.Fprintf(os.Stderr, "[UNION CNI]: Failed to load args %q: %v\r\n", args.Args, err)
+        return err
+    }
+
+    // Get annotaions, parse data and control bridge name, and delete all
+    fmt.Fprintf(os.Stderr, "[UNION CNI] k8s namespace: %s, pod name: %s\r\n", k8sArgs.K8S_POD_NAMESPACE, k8sArgs.K8S_POD_NAME)
+    if len(k8sArgs.K8S_POD_NAME) != 0 || len(k8sArgs.K8S_POD_NAMESPACE) != 0 {
+        netInfo, err := netinfo.GetNetInfo(defaultHost, defaultPort, string(k8sArgs.K8S_POD_NAMESPACE), string(k8sArgs.K8S_POD_NAME))
+        if err == nil {
+             deleteNetwork(netInfo, args.Netns)
+        }
+    }
     return nil
 }
 
