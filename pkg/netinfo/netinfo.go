@@ -63,11 +63,11 @@ func GetNetInfo(host string, port string, k8sNamespace string, podName string) (
 }
 
 func (netInfo *NetworkInfo)GetDataBridgeName() string {
-    return fmt.Sprintf("%s-%s-ctrl", netInfo.Crediential, netInfo.Group)
+    return fmt.Sprintf("%s-%s-data", netInfo.Crediential, netInfo.Group)
 }
 
 func (netInfo *NetworkInfo)GetCtrlBridgeName() string {
-    return fmt.Sprintf("%s-%s-data", netInfo.Crediential, netInfo.Group)
+    return fmt.Sprintf("%s-%s-ctrl", netInfo.Crediential, netInfo.Group)
 }
 
 func (netInfo *NetworkInfo)GetCtrlPort() string {

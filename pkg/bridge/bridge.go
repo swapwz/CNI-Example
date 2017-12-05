@@ -43,6 +43,11 @@ func (br *Bridge)AddLink(link netlink.Link) error {
         fmt.Fprintf(os.Stderr, "[UNION CNI] failed to add link %q to bridge %q: %v\r\n", link, br.Name, err)
         return err
     }
+
+    if err := netlink.LinkSetUp(link); err != nil {
+        fmt.Fprintf(os.Stderr, "[UNION CNI] failed to bring up link %v: %v", link, err)
+        return err
+    }
     return nil
 }
 
