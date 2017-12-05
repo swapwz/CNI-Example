@@ -162,6 +162,7 @@ func cmdAdd(args *skel.CmdArgs) error {
         } else {
 	     kubeMaster = defaultHost
         }
+        fmt.Fprintf(os.Stderr, "[UNION CNI] kubemaster %v\r\n", kubeMaster)
         netInfo, _ := netinfo.GetNetInfo(kubeMaster, defaultPort, 
                             string(k8sArgs.K8S_POD_NAMESPACE), 
                             string(k8sArgs.K8S_POD_NAME))
