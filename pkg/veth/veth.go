@@ -96,12 +96,7 @@ func CreateVethPair(name string, peer string) (netlink.Link, netlink.Link, error
     return hostLink, peerLink, nil
 }
 
-func DelLink(name string, nspath string) error {
-    netns, err := ns.GetNS(nspath)
-    if err != nil {
-        return err
-    }
-    defer netns.Close()
+func DelLink(name string) error {
     link, err := netlink.LinkByName(name)
     if err != nil {
         if err.Error() == "Link not found" {
@@ -115,6 +110,16 @@ func DelLink(name string, nspath string) error {
     }
 
     return nil
+}
+
+func DelLinkInNS(name string, nspath string) error {
+    netns, err := ns.GetNS(nspath)
+    if err != nil {
+        return err
+    }
+    defer netns.Close()
+
+    return DelLink(name)
 }
 
 // Current namespace is the default namespace

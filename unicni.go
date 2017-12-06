@@ -47,6 +47,45 @@ func init() {
     runtime.LockOSThread()
 }
 
+func deleteExternalPorts(net *netinfo.NetworkInfo, netns string) (err error) {
+    cred := net.GetCred()
+    group := net.GetGroup()
+    devID := net.GetDeviceID()
+    extPorts := net.GetExternalPorts()
+    for _, ext := range extPorts {
+        veth.DelLinkInNS(ext.ContainerPort, netns)
+        extBrName := fmt.Sprintf("%s%s-%s%s", cred, group, devID, ext.ContainerPort)
+        bridge.DeleteBridge(extBrName)
+    }
+    return
+}
+
+func createExternalPorts(net *netinfo.NetworkInfo, netns string) (err error) {
+    cred := net.GetCred()
+    group := net.GetGroup()
+    devID := net.GetDeviceID()
+    extPorts := net.GetExternalPorts()
+    for _, ext := range extPorts {
+        extBrName := fmt.Sprintf("%s%s-%s%s", cred, group, devID, ext.ContainerPort)
+        br,err := bridge.CreateBridge(extBrName)
+        if err == nil {
+            _, cHostLink, err := veth.CreateVethPairRandom(ext.ContainerPort)
+            if err == nil {
+                veth.JoinNetNS(ext.ContainerPort, netns)
+                err = br.AddLink(cHostLink)
+                if err != nil {
+                     veth.DelLinkInNS(ext.ContainerPort, netns)
+                }
+            }
+        }
+        
+    }
+
+    fmt.Fprintf(os.Stderr, "[UNION CNI] get extports %v\r\n", extPorts)
+
+    return 
+}
+
 func createNetwork(net *netinfo.NetworkInfo, netns string) (*current.Result, error) {
     // the length of bridge name must be less than 15 characters.
     ctrlBrName := net.GetCtrlBridgeName()
@@ -102,6 +141,9 @@ func createNetwork(net *netinfo.NetworkInfo, netns string) (*current.Result, err
         return nil, err
     }
 
+    // create external ports 
+    createExternalPorts(net, netns)
+
     // assemble result
     result := &current.Result{}
     ctrlBrIntf := ctrlBr.BridgeInterface()
@@ -122,18 +164,20 @@ func createNetwork(net *netinfo.NetworkInfo, netns string) (*current.Result, err
 
 func deleteNetwork(netInfo *netinfo.NetworkInfo, nspath string) error {
     ctrlPortName := netInfo.GetCtrlPort()
-    err := veth.DelLink(ctrlPortName, nspath)
+    err := veth.DelLinkInNS(ctrlPortName, nspath)
     if err != nil && err != veth.ErrLinkNotFound {
          fmt.Fprintf(os.Stderr, "[UNION CNI] failed to delete link %s: %v\r\n", ctrlPortName, err)
          return err
     }
 
     dataPortName := netInfo.GetDataPort()
-    err = veth.DelLink(dataPortName, nspath)
+    err = veth.DelLinkInNS(dataPortName, nspath)
     if err != nil && err != veth.ErrLinkNotFound {
          fmt.Fprintf(os.Stderr, "[UNION CNI] failed to delete link %s: %v\r\n", ctrlPortName, err)
          return err
     }
+
+    deleteExternalPorts(netInfo, nspath)
     return nil
 }
 

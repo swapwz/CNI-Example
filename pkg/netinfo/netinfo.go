@@ -20,9 +20,16 @@ const (
     netInfoKey = "network_info"
 )
 
+type ExternalInfo struct {
+    HostPort string
+    ContainerPort string
+    Type string
+}
+
 type NetworkInfo struct {
     Crediential string `json:"credential"`
     Group       string `json:"group"`
+    DeviceID    string `json:"deviceid"`
     CtrlPort    string `json:"control_port"`
     DataPort    string `json:"data_port"`
     ExternalPort []struct {
@@ -30,6 +37,22 @@ type NetworkInfo struct {
         ContainerPort string `json:"container_port"`
         MapType string `json:"type"`
     } `json:"external_port"`
+}
+
+func (netInfo *NetworkInfo)GetExternalPorts() ([]ExternalInfo) {
+    externals := netInfo.ExternalPort
+    if len(externals) != 0 {
+        extInfo := make([]ExternalInfo, len(externals))
+        for index, ext := range externals {
+           fmt.Fprintf(os.Stderr, "[UNION CNI] external %v\r\n", ext)
+           extInfo[index].HostPort = ext.HostPort
+           extInfo[index].ContainerPort = ext.ContainerPort
+           extInfo[index].Type = ext.MapType
+       }
+       return extInfo
+    } else {
+       return nil
+    }
 }
 
 func GetNetInfo(host string, port string, k8sNamespace string, podName string) (*NetworkInfo, error) {
@@ -86,4 +109,16 @@ func (netInfo *NetworkInfo)GetDataPort() string {
         return defaultDataPort
     }
     return netInfo.DataPort
+}
+
+func (netInfo *NetworkInfo)GetDeviceID() string {
+    return netInfo.DeviceID
+}
+
+func (netInfo *NetworkInfo)GetCred() string {
+    return netInfo.Crediential
+}
+
+func (netInfo *NetworkInfo)GetGroup() string {
+    return netInfo.Group
 }

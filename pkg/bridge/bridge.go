@@ -89,6 +89,20 @@ func ensureBridge(name string, mtu int, promiscMode bool) (*netlink.Bridge, erro
     return br, nil
 }
 
+func DeleteBridge(name string) (error) {
+    brLink, err := netlink.LinkByName(name)
+    if err != nil {
+        fmt.Fprintf(os.Stderr, "[UNION CNI] failed to lookup %q: %v\r\n", name, err)
+        return err
+    }
+
+    if err = netlink.LinkSetDown(brLink); err != nil {
+        return err
+    }
+
+    return netlink.LinkDel(brLink)
+}
+
 func CreateBridge(name string) (*Bridge, error) {
     br, err := ensureBridge(name, defaultMTU, defaultPromiscMode)
     if err != nil {
