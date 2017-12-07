@@ -1,11 +1,10 @@
-package bridge
+package link
 
 import (
     "fmt"
     "os"
     "syscall"
 
-    "github.com/containernetworking/cni/pkg/types/current"
     "github.com/vishvananda/netlink"
 )
 
@@ -15,13 +14,6 @@ const defaultPromiscMode = true
 type Bridge struct {
     Data *netlink.Bridge
     Name string
-}
-
-func (br *Bridge)BridgeInterface() (*current.Interface) {
-    return &current.Interface {
-        Name: br.Data.Attrs().Name,
-        Mac: br.Data.Attrs().HardwareAddr.String(),
-    }
 }
 
 func BridgeByName(name string) (*netlink.Bridge, error) {

@@ -13,43 +13,28 @@ var (
     ErrNoSuchItem = errors.New("no such item")
 )
 
-
 const (
-    defaultCtrlPort = "dc0"
-    defaultDataPort = "ddc0"
     netInfoKey = "network_info"
 )
 
 type ExternalInfo struct {
-    HostPort string
-    ContainerPort string
-    Type string
+    HostPort string         `json:"host_port"`
+    ContainerPort string    `json:"container_port"`
+    Type string             `json:"type"`
 }
 
 type NetworkInfo struct {
     Crediential string `json:"credential"`
     Group       string `json:"group"`
     DeviceID    string `json:"deviceid"`
-    CtrlPort    string `json:"control_port"`
-    DataPort    string `json:"data_port"`
-    ExternalPort []struct {
-        HostPort string `json:"host_port"`
-        ContainerPort string `json:"container_port"`
-        MapType string `json:"type"`
-    } `json:"external_port"`
+    SystemChan  map[string]string  `json:"system_channels"`
+    ExternalPort []ExternalInfo `json:"external_ports"`
 }
 
 func (netInfo *NetworkInfo)GetExternalPorts() ([]ExternalInfo) {
     externals := netInfo.ExternalPort
     if len(externals) != 0 {
-        extInfo := make([]ExternalInfo, len(externals))
-        for index, ext := range externals {
-           fmt.Fprintf(os.Stderr, "[UNION CNI] external %v\r\n", ext)
-           extInfo[index].HostPort = ext.HostPort
-           extInfo[index].ContainerPort = ext.ContainerPort
-           extInfo[index].Type = ext.MapType
-       }
-       return extInfo
+       return externals
     } else {
        return nil
     }
@@ -89,26 +74,8 @@ func GetNetInfo(host string, port string, k8sNamespace string, podName string) (
     return netInfo, nil
 }
 
-func (netInfo *NetworkInfo)GetDataBridgeName() string {
-    return fmt.Sprintf("%s-%s-data", netInfo.Crediential, netInfo.Group)
-}
-
-func (netInfo *NetworkInfo)GetCtrlBridgeName() string {
-    return fmt.Sprintf("%s-%s-ctrl", netInfo.Crediential, netInfo.Group)
-}
-
-func (netInfo *NetworkInfo)GetCtrlPort() string {
-    if netInfo.CtrlPort == "" {
-        return defaultCtrlPort
-    }
-    return netInfo.CtrlPort
-}
-
-func (netInfo *NetworkInfo)GetDataPort() string {
-    if netInfo.DataPort == "" {
-        return defaultDataPort
-    }
-    return netInfo.DataPort
+func (netInfo *NetworkInfo)GetSystemChannels() (map[string]string) {
+    return netInfo.SystemChan
 }
 
 func (netInfo *NetworkInfo)GetDeviceID() string {

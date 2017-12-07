@@ -1,4 +1,4 @@
-package veth
+package link
 
 import (
     "fmt"
@@ -7,13 +7,9 @@ import (
     "errors"
     "crypto/rand"
    
-    "github.com/containernetworking/cni/pkg/types/current"
     "github.com/containernetworking/plugins/pkg/ns"
     "github.com/vishvananda/netlink"
 )
-
-const defaultMTU = 1400
-const defaultPrefix = "sim"
 
 var (
     ErrLinkNotFound = errors.New("link not found")
@@ -170,19 +166,11 @@ func JoinNetNS(name string, nspath string) error {
     return err
 }
 
-func VethInterface(link netlink.Link, netns ns.NetNS) *current.Interface {
-    netIntf := net.Interface {
-        Index: link.Attrs().Index,
-        MTU: link.Attrs().MTU,
-        Name: link.Attrs().Name,
-        HardwareAddr: link.Attrs().HardwareAddr,
-        Flags: link.Attrs().Flags,
+func SetPromiscOn(link netlink.Link) error {
+    if err := netlink.SetPromiscOn(link); err != nil {
+        fmt.Fprintf(os.Stderr, "[UNION CNI] failed to set promisc mode: %v\r\n", err)
+        return err
     }
 
-    return &current.Interface{
-        Name: netIntf.Name,
-        Mac: netIntf.HardwareAddr.String(),
-        Sandbox: netns.Path(),
-    }
+    return nil
 }
-

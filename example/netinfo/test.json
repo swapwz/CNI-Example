@@ -1,0 +1,19 @@
+{
+         "credential": "test",
+         "group": "hel",
+         "system_channels": {
+            "data": "ddc0", 
+            "ctrl": "dc0",
+            "issu": "dd0" 
+         },
+         "external_ports": [
+             {
+                 "container_port": "eth1",
+                 "type": "bridge"
+             },
+             {
+                 "host_port": "ens160",
+                 "container_port": "eth2"
+             }
+        ]
+}
