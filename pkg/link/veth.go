@@ -111,11 +111,17 @@ func DelLink(name string) error {
 func DelLinkInNS(name string, nspath string) error {
     netns, err := ns.GetNS(nspath)
     if err != nil {
+        fmt.Fprintf(os.Stderr, "[UNION CNI]failed to open namespace %s:%v\r\n", nspath, err)
         return err
     }
-    defer netns.Close()
 
-    return DelLink(name)
+    err = netns.Do(func (_ ns.NetNS) error {
+        return DelLink(name)
+    })
+
+    netns.Close()
+
+    return err
 }
 
 // Current namespace is the default namespace

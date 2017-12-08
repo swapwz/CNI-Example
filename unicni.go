@@ -8,6 +8,7 @@ import (
     "encoding/json"
 
     "github.com/union-cni/pkg/link"
+    "github.com/union-cni/pkg/ip"
     "github.com/union-cni/pkg/netinfo"
 
     "github.com/containernetworking/cni/pkg/skel"
@@ -72,10 +73,15 @@ func createExternalPorts(netInfo *netinfo.NetworkInfo, netns string) (err error)
             cLink, cHostLink, err := link.CreateVethPairRandom(ext.ContainerPort)
             if err == nil {
                 link.SetPromiscOn(cLink)
-                link.JoinNetNS(ext.ContainerPort, netns)
+                err = link.JoinNetNS(ext.ContainerPort, netns)
+                fmt.Fprintf(os.Stderr, "[UNION CNI]join nspath %s failed: %v\r\n", netns, err)
+                if ext.IP != "" {
+                    err = ip.AddrAddInNS(ext.ContainerPort, ext.IP, netns)
+                    fmt.Fprintf(os.Stderr, "[UNION CNI] add ip addr %s: %v\r\n", ext.IP, err)
+                }
                 err = br.AddLink(cHostLink)
                 if err != nil {
-                     link.DelLinkInNS(ext.ContainerPort, netns)
+                    link.DelLinkInNS(ext.ContainerPort, netns)
                 }
             }
         }
@@ -143,13 +149,11 @@ func createNetwork(netInfo *netinfo.NetworkInfo, netns string) (*current.Result,
 func deleteNetwork(netInfo *netinfo.NetworkInfo, nspath string) error {
     for _, chanName := range netInfo.GetSystemChannels() {
         err := link.DelLinkInNS(chanName, nspath)
-        if err != nil && err != link.ErrLinkNotFound {
-            fmt.Fprintf(os.Stderr, "[UNION CNI] failed to delete link %s: %v\r\n", chanName, err)
-            return err
-        }
+        fmt.Fprintf(os.Stderr, "[UNION CNI]deleteNetwork %s: %v\r\n", chanName, err)
     }
 
     deleteExternalPorts(netInfo, nspath)
+
     return nil
 }
 

@@ -21,6 +21,7 @@ type ExternalInfo struct {
     HostPort string         `json:"host_port"`
     ContainerPort string    `json:"container_port"`
     Type string             `json:"type"`
+    IP string               `json:"ipaddr"`
 }
 
 type NetworkInfo struct {
