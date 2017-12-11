@@ -147,9 +147,13 @@ func createNetwork(netInfo *netinfo.NetworkInfo, netns string) (*current.Result,
 }
 
 func deleteNetwork(netInfo *netinfo.NetworkInfo, nspath string) error {
-    for _, chanName := range netInfo.GetSystemChannels() {
+    cred := netInfo.GetCred()
+    group := netInfo.GetGroup()
+    for chanType, chanName := range netInfo.GetSystemChannels() {
         err := link.DelLinkInNS(chanName, nspath)
         fmt.Fprintf(os.Stderr, "[UNION CNI]deleteNetwork %s: %v\r\n", chanName, err)
+        sysBr := fmt.Sprintf("%s-%s-%s", cred, group, chanType)
+        link.DeleteBridgeIfEmpty(sysBr)
     }
 
     deleteExternalPorts(netInfo, nspath)

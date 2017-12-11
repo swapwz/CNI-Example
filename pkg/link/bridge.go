@@ -10,6 +10,7 @@ import (
 
 const defaultMTU = 1400
 const defaultPromiscMode = true
+const sysBrPath = "/sys/class/net/%s/brif"
 
 type Bridge struct {
     Data *netlink.Bridge
@@ -107,4 +108,24 @@ func CreateBridge(name string) (*Bridge, error) {
     }
 
     return bridge, nil
+}
+
+func DeleteBridgeIfEmpty(brName string) error {
+    // walk over the bridge path    
+    brDir,err := os.Open(brName)
+    if err != nil {
+        return err
+    }
+
+    // read all names from brDir
+    names,err := brDir.Readdirnames(0)
+    if err != nil {
+        return err
+    }
+
+    // empty bridge, we do delete it
+    if len(names) == 0 {
+        DeleteBridge(brName)
+    }
+    return  nil
 }
