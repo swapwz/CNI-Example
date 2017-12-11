@@ -112,7 +112,8 @@ func CreateBridge(name string) (*Bridge, error) {
 
 func DeleteBridgeIfEmpty(brName string) error {
     // walk over the bridge path    
-    brDir,err := os.Open(brName)
+    brPath := fmt.Sprintf(sysBrPath, brName)
+    brDir,err := os.Open(brPath)
     if err != nil {
         return err
     }
