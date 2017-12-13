@@ -21,6 +21,7 @@ type ExternalInfo struct {
     HostPort string         `json:"host_port"`
     ContainerPort string    `json:"container_port"`
     Type string             `json:"type"`
+    Mode string		    `json:"mode"`
     IP string               `json:"ipaddr"`
 }
 

@@ -61,36 +61,59 @@ func deleteExternalPorts(netInfo *netinfo.NetworkInfo, netns string) (err error)
     return
 }
 
-func createExternalPorts(netInfo *netinfo.NetworkInfo, netns string) (err error) {
+func createBridgeMode(cred string, group string, devID string, conPortName string, nspath string) error {
+    extBrName := fmt.Sprintf("%s%s-%s%s", cred, group, devID, conPortName)
+    br,err := link.CreateBridge(extBrName)
+    if err == nil {
+        cLink, cHostLink, err := link.CreateVethPairRandom(conPortName)
+        if err == nil {
+            link.SetPromiscOn(cLink)
+            err = link.JoinNetNS(conPortName, nspath)
+            if err != nil {
+                 fmt.Fprintf(os.Stderr, "[UNION CNI]join nspath %s failed: %v\r\n", nspath, err)
+            } else {
+                err = br.AddLink(cHostLink)
+                if err != nil {
+                    link.DelLinkInNS(conPortName, nspath)
+                }
+            }
+        }
+    }
+
+    return err
+}
+
+func createMacvlanMode(hostPort string, conPort string, mode string, nspath string) error {
+    _, err := link.CreateMacvlanInNS(hostPort, conPort, mode, nspath)
+    if err != nil {
+        fmt.Fprintf(os.Stderr, "[UNION CNI] failed create macvlan port %s: %v\r\n", conPort, err)
+    }
+
+    return err
+}
+
+func createExternalPorts(netInfo *netinfo.NetworkInfo, nspath string) (err error) {
     cred := netInfo.GetCred()
     group := netInfo.GetGroup()
     devID := netInfo.GetDeviceID()
     extPorts := netInfo.GetExternalPorts()
     for _, ext := range extPorts {
-        extBrName := fmt.Sprintf("%s%s-%s%s", cred, group, devID, ext.ContainerPort)
-        br,err := link.CreateBridge(extBrName)
-        if err == nil {
-            cLink, cHostLink, err := link.CreateVethPairRandom(ext.ContainerPort)
-            if err == nil {
-                link.SetPromiscOn(cLink)
-                err = link.JoinNetNS(ext.ContainerPort, netns)
-                fmt.Fprintf(os.Stderr, "[UNION CNI]join nspath %s failed: %v\r\n", netns, err)
-                if ext.IP != "" {
-                    err = ip.AddrAddInNS(ext.ContainerPort, ext.IP, netns)
-                    fmt.Fprintf(os.Stderr, "[UNION CNI] add ip addr %s: %v\r\n", ext.IP, err)
-                }
-                err = br.AddLink(cHostLink)
-                if err != nil {
-                    link.DelLinkInNS(ext.ContainerPort, netns)
-                }
-            }
+        switch ext.Type { 
+            case "macvlan": 
+                err = createMacvlanMode(ext.HostPort, ext.ContainerPort, ext.Mode, nspath)
+            default:
+                err = createBridgeMode(cred, group, devID, ext.ContainerPort, nspath)
         }
-        
+
+        if (err == nil) && (ext.IP != "") {
+            err = ip.AddrAddInNS(ext.ContainerPort, ext.IP, nspath)
+            fmt.Fprintf(os.Stderr, "[UNION CNI] add ip addr %s: %v\r\n", ext.IP, err)
+        }
     }
 
     fmt.Fprintf(os.Stderr, "[UNION CNI] get extports %v\r\n", extPorts)
 
-    return 
+    return
 }
 
 func appendIntfs(l netlink.Link, nspath string) *current.Interface {
