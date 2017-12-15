@@ -53,7 +53,7 @@ func GetNetInfo(host string, port string, k8sNamespace string, podName string) (
     rawData, ok := pod.Annotations[netInfoKey]
     if !ok {
         fmt.Fprintf(os.Stderr, "[UNION CNI] no annotation: network_info\r\n")
-        return nil, nil
+        return nil, fmt.Errorf("no annotation: network_info")
     }
 
     netInfo := &NetworkInfo{}
