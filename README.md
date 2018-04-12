@@ -6,11 +6,11 @@
 # How to use it?
 
 - checkout the source code into your linux system. 
-# git clone https://github.com/swapwz/union-cni.git
+> `# git clone https://github.com/swapwz/union-cni.git`
 - use go compiler to build the binary
-    `# go build unicni`
+> `# go build unicni`
 - put the binary into your CNI path, default is /opt/cni/bin
-    `# cp unicni /opt/cni/bin/ `
+> `# cp unicni /opt/cni/bin/ `
 - write your own configuration, with the file /etc/cni/net.d/00-unicni
     uni.conflist:
     {
@@ -44,3 +44,7 @@ metadata:
          "group": "g1"
      }'
 `
+
+# Implementation
+
+To be continue
